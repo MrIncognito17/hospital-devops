@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hospital Management System</title>
+<style>
+  :root { --blue:#1a6fd4; --bg:#f4f7fb; --text:#1d2733; --muted:#6b7a8c; --line:#dde5ee; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:Segoe UI, Arial, sans-serif; background:var(--bg); color:var(--text); }
+  header { background:var(--blue); color:#fff; padding:18px 28px; }
+  header h1 { margin:0; font-size:22px; }
+  header p { margin:4px 0 0; font-size:13px; opacity:.85; }
+  nav { display:flex; gap:6px; padding:14px 28px 0; }
+  nav button { border:0; background:#e3eaf3; padding:10px 20px; border-radius:8px 8px 0 0; font-size:15px; cursor:pointer; color:var(--text); }
+  nav button.active { background:#fff; color:var(--blue); font-weight:600; }
+  main { background:#fff; margin:0 28px 28px; padding:24px; border-radius:0 8px 8px 8px; box-shadow:0 1px 4px rgba(0,0,0,.08); }
+  section { display:none; } section.active { display:block; }
+  h2 { margin:0 0 14px; font-size:18px; }
+  form { display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; margin-bottom:20px; }
+  label { display:flex; flex-direction:column; font-size:12px; color:var(--muted); gap:4px; }
+  input, select { padding:9px 10px; border:1px solid var(--line); border-radius:6px; font-size:14px; min-width:170px; }
+  .add { background:var(--blue); color:#fff; border:0; padding:10px 20px; border-radius:6px; font-size:14px; cursor:pointer; }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  th { text-align:left; background:var(--bg); padding:10px; color:var(--muted); font-size:12px; text-transform:uppercase; }
+  td { padding:10px; border-top:1px solid var(--line); }
+  .del { background:none; border:1px solid #e3b4b4; color:#c0392b; border-radius:6px; padding:4px 10px; cursor:pointer; }
+  .empty { color:var(--muted); padding:16px 0; }
+  #msg { position:fixed; bottom:20px; right:20px; padding:12px 18px; border-radius:8px; color:#fff; display:none; font-size:14px; }
+  #msg.ok { background:#2e8b57; } #msg.err { background:#c0392b; }
+</style>
+</head>
+<body>
+<header><h1>🏥 Hospital Management System</h1><p>Patients · Doctors · Appointments</p></header>
+<nav>
+  <button class="active" data-tab="patients">Patients</button>
+  <button data-tab="doctors">Doctors</button>
+  <button data-tab="appointments">Appointments</button>
+</nav>
+<main>
+  <section id="patients" class="active">
+    <h2>Add a patient</h2>
+    <form id="fp">
+      <label>Name<input name="name" required></label>
+      <label>Age<input name="age" type="number" min="0" max="150" required></label>
+      <label>Phone<input name="phone" required minlength="5"></label>
+      <button class="add">Add patient</button>
+    </form>
+    <table><thead><tr><th>ID</th><th>Name</th><th>Age</th><th>Phone</th><th></th></tr></thead><tbody id="tp"></tbody></table>
+  </section>
+
+  <section id="doctors">
+    <h2>Add a doctor</h2>
+    <form id="fd">
+      <label>Name<input name="name" required></label>
+      <label>Specialization<input name="specialization" required></label>
+      <button class="add">Add doctor</button>
+    </form>
+    <table><thead><tr><th>ID</th><th>Name</th><th>Specialization</th></tr></thead><tbody id="td"></tbody></table>
+  </section>
+
+  <section id="appointments">
+    <h2>Book an appointment</h2>
+    <form id="fa">
+      <label>Patient<select name="patient_id" id="sp" required></select></label>
+      <label>Doctor<select name="doctor_id" id="sd" required></select></label>
+      <label>Date &amp; time<input name="scheduled_at" type="datetime-local" required></label>
+      <label>Reason<input name="reason"></label>
+      <button class="add">Book</button>
+    </form>
+    <table><thead><tr><th>ID</th><th>Patient</th><th>Doctor</th><th>When</th><th>Reason</th><th></th></tr></thead><tbody id="ta"></tbody></table>
+  </section>
+</main>
+<div id="msg"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+let patients = [], doctors = [];
+
+function toast(text, ok=true) {
+  const m = $("msg"); m.textContent = text; m.className = ok ? "ok" : "err"; m.style.display = "block";
+  setTimeout(() => m.style.display = "none", 3000);
+}
+async function api(method, url, body) {
+  const r = await fetch(url, { method, headers: {"Content-Type":"application/json"}, body: body ? JSON.stringify(body) : undefined });
+  if (!r.ok) {
+    let d = ""; try { const j = await r.json(); d = typeof j.detail === "string" ? j.detail : "Please check the values you entered"; } catch {}
+    throw new Error(d || "Something went wrong");
+  }
+  return r.status === 204 ? null : r.json();
+}
+const rows = (html, cols) => html || `<tr><td class="empty" colspan="${cols}">Nothing here yet.</td></tr>`;
+
+async function load() {
+  [patients, doctors] = await Promise.all([api("GET","/patients"), api("GET","/doctors")]);
+  const appts = await api("GET","/appointments");
+  $("tp").innerHTML = rows(patients.map(p => `<tr><td>${p.id}</td><td>${esc(p.name)}</td><td>${p.age}</td><td>${esc(p.phone)}</td><td><button class="del" onclick="del('/patients/${p.id}')">Delete</button></td></tr>`).join(""), 5);
+  $("td").innerHTML = rows(doctors.map(d => `<tr><td>${d.id}</td><td>${esc(d.name)}</td><td>${esc(d.specialization)}</td></tr>`).join(""), 3);
+  $("sp").innerHTML = patients.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join("");
+  $("sd").innerHTML = doctors.map(d => `<option value="${d.id}">${esc(d.name)} (${esc(d.specialization)})</option>`).join("");
+  const pn = Object.fromEntries(patients.map(p => [p.id, p.name])), dn = Object.fromEntries(doctors.map(d => [d.id, d.name]));
+  $("ta").innerHTML = rows(appts.map(a => `<tr><td>${a.id}</td><td>${esc(pn[a.patient_id]||"?")}</td><td>${esc(dn[a.doctor_id]||"?")}</td><td>${new Date(a.scheduled_at).toLocaleString()}</td><td>${esc(a.reason)}</td><td><button class="del" onclick="del('/appointments/${a.id}')">Cancel</button></td></tr>`).join(""), 6);
+}
+function esc(s) { return String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+async function del(url) { try { await api("DELETE", url); toast("Done"); load(); } catch(e) { toast(e.message, false); } }
+
+function wire(formId, url, fix) {
+  $(formId).addEventListener("submit", async e => {
+    e.preventDefault();
+    const data = Object.fromEntries(new FormData(e.target)); if (fix) fix(data);
+    try { await api("POST", url, data); e.target.reset(); toast("Saved"); load(); } catch(err) { toast(err.message, false); }
+  });
+}
+wire("fp", "/patients", d => d.age = +d.age);
+wire("fd", "/doctors");
+wire("fa", "/appointments", d => { d.patient_id = +d.patient_id; d.doctor_id = +d.doctor_id; });
+
+document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
+  document.querySelectorAll("nav button, section").forEach(x => x.classList.remove("active"));
+  b.classList.add("active"); $(b.dataset.tab).classList.add("active");
+});
+load();
+</script>
+</body>
+</html>
