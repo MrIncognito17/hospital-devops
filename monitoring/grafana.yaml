@@ -1,4 +1,3 @@
-# Grafana: draws graphs from Prometheus data
 apiVersion: v1
 kind: Secret
 metadata:
@@ -6,8 +5,8 @@ metadata:
   namespace: monitoring
 type: Opaque
 stringData:
-  GF_SECURITY_ADMIN_USER: "admin"
-  GF_SECURITY_ADMIN_PASSWORD: "hospital123"
+  GF_SECURITY_ADMIN_USER: admin
+  GF_SECURITY_ADMIN_PASSWORD: hospital123
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -18,12 +17,17 @@ data:
   datasource.yaml: |
     apiVersion: 1
     datasources:
-      - name: Prometheus
-        uid: prometheus
-        type: prometheus
-        access: proxy
-        url: http://prometheus.monitoring.svc.cluster.local:9090
-        isDefault: true
+    - name: Prometheus
+      uid: prometheus
+      type: prometheus
+      access: proxy
+      url: http://prometheus.monitoring.svc.cluster.local:9090
+      isDefault: true
+    - name: Loki
+      uid: loki
+      type: loki
+      access: proxy
+      url: http://loki.monitoring.svc.cluster.local:3100
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -45,12 +49,12 @@ metadata:
   name: grafana-dashboard
   namespace: monitoring
 data:
-  hospital-api.json: |
+  hospital-api.json: |-
     {
       "uid": "hospital-api",
       "title": "Hospital API",
       "schemaVersion": 39,
-      "version": 1,
+      "version": 2,
       "refresh": "10s",
       "time": {
         "from": "now-15m",
@@ -208,6 +212,36 @@ data:
             },
             "overrides": []
           }
+        },
+        {
+          "id": 6,
+          "title": "Application logs (live)",
+          "type": "logs",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 14,
+            "w": 24,
+            "h": 11
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "{app=\"hospital-api\"} | json",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              }
+            }
+          ],
+          "options": {
+            "showTime": true,
+            "wrapLogMessage": true,
+            "sortOrder": "Descending"
+          }
         }
       ]
     }
@@ -228,30 +262,30 @@ spec:
         app: grafana
     spec:
       containers:
-        - name: grafana
-          image: grafana/grafana:11.2.0
-          ports:
-            - containerPort: 3000
-          envFrom:
-            - secretRef:
-                name: grafana-secret
-          volumeMounts:
-            - name: datasource
-              mountPath: /etc/grafana/provisioning/datasources
-            - name: provider
-              mountPath: /etc/grafana/provisioning/dashboards
-            - name: dashboard
-              mountPath: /var/lib/grafana/dashboards
-      volumes:
+      - name: grafana
+        image: grafana/grafana:11.2.0
+        ports:
+        - containerPort: 3000
+        envFrom:
+        - secretRef:
+            name: grafana-secret
+        volumeMounts:
         - name: datasource
-          configMap:
-            name: grafana-datasource
+          mountPath: /etc/grafana/provisioning/datasources
         - name: provider
-          configMap:
-            name: grafana-dashboard-provider
+          mountPath: /etc/grafana/provisioning/dashboards
         - name: dashboard
-          configMap:
-            name: grafana-dashboard
+          mountPath: /var/lib/grafana/dashboards
+      volumes:
+      - name: datasource
+        configMap:
+          name: grafana-datasource
+      - name: provider
+        configMap:
+          name: grafana-dashboard-provider
+      - name: dashboard
+        configMap:
+          name: grafana-dashboard
 ---
 apiVersion: v1
 kind: Service
@@ -263,6 +297,6 @@ spec:
   selector:
     app: grafana
   ports:
-    - port: 3000
-      targetPort: 3000
-      nodePort: 30030
+  - port: 3000
+    targetPort: 3000
+    nodePort: 30030
