@@ -1,0 +1,10 @@
+# PersistentVolumeClaim = permanent storage that survives pod restarts
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: hospital-data
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi

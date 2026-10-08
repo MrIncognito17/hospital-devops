@@ -1,0 +1,13 @@
+# Service = a stable address to reach the app
+apiVersion: v1
+kind: Service
+metadata:
+  name: hospital-api
+spec:
+  type: NodePort
+  selector:
+    app: hospital-api
+  ports:
+    - port: 8000
+      targetPort: 8000
+      nodePort: 30080

@@ -1,0 +1,8 @@
+# ConfigMap = NON-secret settings
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hospital-config
+data:
+  LOG_LEVEL: "INFO"
+  APP_VERSION: "1.0.0"
